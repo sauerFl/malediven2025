@@ -3,13 +3,29 @@
 <head>
   <meta charset="UTF-8">
   <title>Zugang zu Malediven 2025 – D+F</title>
-  <script src="https://cdn.jsdelivr.net/npm/@unlock-protocol/unlock-js@1.5.1/dist/unlock.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 2em; background: #f0f0f0; }
-    #gatedContent { display: none; margin-top: 2em; }
-    #connect { padding: 1em 2em; font-size: 1.2em; cursor: pointer; }
-    img { max-width: 100%; height: auto; border: 1px solid #ccc; margin-top: 1em; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 2em;
+      background: #f0f0f0;
+    }
+    #gatedContent {
+      display: none;
+      margin-top: 2em;
+    }
+    #connect {
+      padding: 1em 2em;
+      font-size: 1.2em;
+      cursor: pointer;
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+      margin-top: 1em;
+    }
   </style>
 </head>
 <body>
@@ -35,22 +51,28 @@
       const web3 = new Web3(window.ethereum);
       await window.ethereum.request({ method: 'eth_requestAccounts' });
       const accounts = await web3.eth.getAccounts();
-      const userAddress = accounts[0];
+      const userAddress = accounts[0].toLowerCase();
+
+      const abi = [{
+        constant: true,
+        inputs: [{ name: "tokenId", type: "uint256" }],
+        name: "ownerOf",
+        outputs: [{ name: "", type: "address" }],
+        type: "function"
+      }];
 
       try {
-        const response = await fetch(`https://polygon-mainnet.g.alchemy.com/nft/v2/demo/getNFTs/?owner=${userAddress}&contractAddresses[]=${lockAddress}`);
-        const data = await response.json();
+        const contract = new web3.eth.Contract(abi, lockAddress);
+        const owner = await contract.methods.ownerOf(tokenIdRequired).call();
 
-        const ownsKey = data.ownedNfts && data.ownedNfts.some(nft => nft.id.tokenId === tokenIdRequired);
-
-        if (ownsKey) {
+        if (owner.toLowerCase() === userAddress) {
           document.getElementById('gatedContent').style.display = 'block';
         } else {
           alert('Du besitzt leider nicht den benötigten NFT.');
         }
       } catch (err) {
-        console.error('Fehler beim NFT-Check:', err);
-        alert('Fehler beim Zugriff. Bitte versuche es erneut.');
+        console.error('Fehler beim Zugriff auf den Smart Contract:', err);
+        alert('Zugriffsfehler – ist die Token-ID gültig?');
       }
     }
 
