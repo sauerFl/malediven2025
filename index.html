@@ -9,7 +9,7 @@
       font-family: Arial, sans-serif;
       text-align: center;
       padding: 2em;
-      background: #f0f0f0;
+      background: #f0f8ff;
     }
     #gatedContent {
       display: none;
@@ -18,13 +18,26 @@
     #connect {
       padding: 1em 2em;
       font-size: 1.2em;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
       cursor: pointer;
     }
-    img {
-      max-width: 100%;
-      height: auto;
-      border: 1px solid #ccc;
+    #connect:hover {
+      background-color: #0056b3;
+    }
+    a.button-link {
+      display: inline-block;
       margin-top: 1em;
+      padding: 1em 2em;
+      background-color: #2980b9;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+    a.button-link:hover {
+      background-color: #1f5f8b;
     }
   </style>
 </head>
@@ -34,8 +47,10 @@
   <button id="connect">Wallet verbinden</button>
 
   <div id="gatedContent">
-    <h2>Willkommen! Hier ist dein geschützter Inhalt:</h2>
-    <img src="https://arweave.net/qFsCoiVZJEv2vJX5z7qvpRAsjVykcvgg2frGaCGvh_U/1.jpg" alt="Malediven 2025">
+    <h2>Willkommen! Hier ist dein geschützter Zugang:</h2>
+    <a class="button-link" href="https://arweave.net/rVnaypxiapmzUO0zb7ii6ecDs-wj8COmSrV9woANmCA/inhalte.html" target="_blank">
+      ➡️ Zur privaten Inhalte-Seite
+    </a>
   </div>
 
   <script>
@@ -61,7 +76,7 @@
       }];
 
       const contract = new web3.eth.Contract(abi, lockAddress);
-      const tokenIds = [1, 2];
+      const tokenIds = [1, 2]; // Füge hier weitere gültige Token-IDs hinzu
 
       try {
         let accessGranted = false;
