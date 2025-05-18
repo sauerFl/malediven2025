@@ -29,7 +29,7 @@
   </style>
 </head>
 <body>
-  <h1>Zugang zum Stammbaum: Malediven 2025 – D+F</h1>
+  <h1>Zugang zum Ordner: Malediven 2025 – D+F</h1>
   <p>Bitte verbinde deine Wallet, um den geschützten Inhalt zu sehen.</p>
   <button id="connect">Wallet verbinden</button>
 
@@ -40,7 +40,6 @@
 
   <script>
     const lockAddress = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
-    const tokenIdRequired = "1";
 
     async function checkAccess() {
       if (typeof window.ethereum === 'undefined') {
@@ -55,24 +54,40 @@
 
       const abi = [{
         constant: true,
+        inputs: [],
+        name: "totalSupply",
+        outputs: [{ name: "", type: "uint256" }],
+        type: "function"
+      }, {
+        constant: true,
         inputs: [{ name: "tokenId", type: "uint256" }],
         name: "ownerOf",
         outputs: [{ name: "", type: "address" }],
         type: "function"
       }];
 
-      try {
-        const contract = new web3.eth.Contract(abi, lockAddress);
-        const owner = await contract.methods.ownerOf(tokenIdRequired).call();
+      const contract = new web3.eth.Contract(abi, lockAddress);
 
-        if (owner.toLowerCase() === userAddress) {
+      try {
+        const totalSupply = await contract.methods.totalSupply().call();
+        let accessGranted = false;
+
+        for (let i = 0; i < totalSupply; i++) {
+          const owner = await contract.methods.ownerOf(i).call();
+          if (owner.toLowerCase() === userAddress) {
+            accessGranted = true;
+            break;
+          }
+        }
+
+        if (accessGranted) {
           document.getElementById('gatedContent').style.display = 'block';
         } else {
-          alert('Du besitzt leider nicht den benötigten NFT.');
+          alert('Du besitzt leider keinen gültigen NFT-Zugang.');
         }
       } catch (err) {
-        console.error('Fehler beim Zugriff auf den Smart Contract:', err);
-        alert('Zugriffsfehler – ist die Token-ID gültig?');
+        console.error('Fehler beim Smart Contract Zugriff:', err);
+        alert('Zugriffsfehler – bitte versuche es erneut.');
       }
     }
 
