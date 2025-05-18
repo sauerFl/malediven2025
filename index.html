@@ -29,7 +29,7 @@
   </style>
 </head>
 <body>
-  <h1>Zugang zum Ordner: Malediven 2025 – D+F</h1>
+  <h1>Zugang zum Stammbaum: Malediven 2025 – D+F</h1>
   <p>Bitte verbinde deine Wallet, um den geschützten Inhalt zu sehen.</p>
   <button id="connect">Wallet verbinden</button>
 
@@ -54,12 +54,6 @@
 
       const abi = [{
         constant: true,
-        inputs: [],
-        name: "totalSupply",
-        outputs: [{ name: "", type: "uint256" }],
-        type: "function"
-      }, {
-        constant: true,
         inputs: [{ name: "tokenId", type: "uint256" }],
         name: "ownerOf",
         outputs: [{ name: "", type: "address" }],
@@ -67,16 +61,20 @@
       }];
 
       const contract = new web3.eth.Contract(abi, lockAddress);
+      const tokenIds = [1, 2];
 
       try {
-        const totalSupply = await contract.methods.totalSupply().call();
         let accessGranted = false;
 
-        for (let i = 0; i < totalSupply; i++) {
-          const owner = await contract.methods.ownerOf(i).call();
-          if (owner.toLowerCase() === userAddress) {
-            accessGranted = true;
-            break;
+        for (let id of tokenIds) {
+          try {
+            const owner = await contract.methods.ownerOf(id).call();
+            if (owner.toLowerCase() === userAddress) {
+              accessGranted = true;
+              break;
+            }
+          } catch (err) {
+            console.warn(`Token-ID ${id} konnte nicht geprüft werden.`);
           }
         }
 
