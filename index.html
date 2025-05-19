@@ -1,110 +1,37 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Zugang zu Malediven 2025 – D+F</title>
-  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NFT-Geschützte Galerie</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.8.0/dist/ethers.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.js"></script>
+  <script type="module" src="./decrypt.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 2em;
-      background: #f0f8ff;
-    }
-    #gatedContent {
-      display: none;
-      margin-top: 2em;
-    }
-    #connect {
-      padding: 1em 2em;
-      font-size: 1.2em;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #connect:hover {
-      background-color: #0056b3;
-    }
-    a.button-link {
-      display: inline-block;
-      margin-top: 1em;
-      padding: 1em 2em;
-      background-color: #2980b9;
-      color: white;
-      text-decoration: none;
-      border-radius: 5px;
-    }
-    a.button-link:hover {
-      background-color: #1f5f8b;
-    }
+    body { font-family: sans-serif; padding: 2em; background: #f5f5f5; }
+    h1 { margin-bottom: 1em; }
+    .gallery { display: flex; gap: 2em; flex-wrap: wrap; }
+    .item { text-align: center; max-width: 200px; }
+    img { width: 100%; height: auto; border: 1px solid #ccc; margin-bottom: 0.5em; }
+    button { padding: 0.5em 1em; cursor: pointer; }
   </style>
 </head>
 <body>
-  <h1>Zugang zum Stammbaum: Malediven 2025 – D+F</h1>
-  <p>Bitte verbinde deine Wallet, um den geschützten Inhalt zu sehen.</p>
-  <button id="connect">Wallet verbinden</button>
-
-  <div id="gatedContent">
-    <h2>Willkommen! Hier ist dein geschützter Zugang:</h2>
-    <a class="button-link" href="https://arweave.net/LcwWLOExlcwN2xlqrpwYo7vJYPTcDlZo9ZVOQ87A-vY/inhalte_vers_3.html" target="_blank">
-      ➡️ Zur privaten Inhalte-Seite
-    </a>
+  <h1>NFT-Geschützte Galerie</h1>
+  <p>Nur Besitzer des entsprechenden NFTs sehen die entschlüsselten Bilder.</p>
+  <div class="gallery">
+    <div class="item">
+      <img id="img0" src="https://via.placeholder.com/200x120?text=Bild+1" alt="Bild 1" />
+      <button onclick="decryptAndDisplayImage(0)">Bild 1 entschlüsseln</button>
+    </div>
+    <div class="item">
+      <img id="img1" src="https://via.placeholder.com/200x120?text=Bild+2" alt="Bild 2" />
+      <button onclick="decryptAndDisplayImage(1)">Bild 2 entschlüsseln</button>
+    </div>
+    <div class="item">
+      <img id="img2" src="https://via.placeholder.com/200x120?text=Bild+3" alt="Bild 3" />
+      <button onclick="decryptAndDisplayImage(2)">Bild 3 entschlüsseln</button>
+    </div>
   </div>
-
-  <script>
-    const lockAddress = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
-
-    async function checkAccess() {
-      if (typeof window.ethereum === 'undefined') {
-        alert('Bitte installiere MetaMask, um fortzufahren.');
-        return;
-      }
-
-      const web3 = new Web3(window.ethereum);
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const accounts = await web3.eth.getAccounts();
-      const userAddress = accounts[0].toLowerCase();
-
-      const abi = [{
-        constant: true,
-        inputs: [{ name: "tokenId", type: "uint256" }],
-        name: "ownerOf",
-        outputs: [{ name: "", type: "address" }],
-        type: "function"
-      }];
-
-      const contract = new web3.eth.Contract(abi, lockAddress);
-      const tokenIds = [1, 2]; // Füge hier weitere gültige Token-IDs hinzu
-
-      try {
-        let accessGranted = false;
-
-        for (let id of tokenIds) {
-          try {
-            const owner = await contract.methods.ownerOf(id).call();
-            if (owner.toLowerCase() === userAddress) {
-              accessGranted = true;
-              break;
-            }
-          } catch (err) {
-            console.warn(`Token-ID ${id} konnte nicht geprüft werden.`);
-          }
-        }
-
-        if (accessGranted) {
-          document.getElementById('gatedContent').style.display = 'block';
-        } else {
-          alert('Du besitzt leider keinen gültigen NFT-Zugang.');
-        }
-      } catch (err) {
-        console.error('Fehler beim Smart Contract Zugriff:', err);
-        alert('Zugriffsfehler – bitte versuche es erneut.');
-      }
-    }
-
-    document.getElementById('connect').addEventListener('click', checkAccess);
-  </script>
 </body>
 </html>
