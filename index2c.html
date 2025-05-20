@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Manifest-Entschlüsselung mit QR & manuell (final fix)</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #eef6ff; padding: 2em; text-align: center; }
+    input, button { margin-top: 1em; padding: 0.6em; width: 90%; max-width: 500px; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+    #qr-reader { width: 300px; margin: 2em auto; display: none; }
+  </style>
+</head>
+<body>
+  <h1>🔓 Manifest-Entschlüsselung</h1>
+  <p>Gib die Daten manuell ein oder scanne einen QR-Code. Entschlüsselung startet erst nach Button-Klick.</p>
+
+  <button id="startScan">📷 QR-Code scannen</button>
+  <div id="qr-reader"></div>
+
+  <input id="manifestIdInput" placeholder="Arweave Manifest TX-ID" />
+  <input id="keyInput" placeholder="AES-Schlüssel (Base64)" />
+  <input id="ivInput" placeholder="IV (Base64)" />
+  <button id="startDecrypt">Manifest laden & Dateien entschlüsseln</button>
+
+  <div id="output"></div>
+
+  <script>
+    let scannedManifest = null;
+
+    document.getElementById("startScan").addEventListener("click", () => {
+      const reader = new Html5Qrcode("qr-reader");
+      document.getElementById("qr-reader").style.display = "block";
+
+      reader.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          try {
+            const data = JSON.parse(decodedText);
+            document.getElementById("manifestIdInput").value = Object.values(data.manifest.paths)[0]?.id || "";
+            document.getElementById("keyInput").value = data.key || "";
+            document.getElementById("ivInput").value = data.iv || "";
+            scannedManifest = data.manifest;
+            reader.stop();
+            document.getElementById("qr-reader").style.display = "none";
+          } catch (e) {
+            alert("❌ Ungültiger QR-Code-Inhalt.");
+            console.error(e);
+          }
+        },
+        (error) => { /* Ignoriere Scanfehler */ }
+      );
+    });
+
+    document.getElementById("startDecrypt").addEventListener("click", async () => {
+      const manifestId = document.getElementById("manifestIdInput").value.trim();
+      const keyBase64 = document.getElementById("keyInput").value.trim();
+      const ivBase64 = document.getElementById("ivInput").value.trim();
+      const output = document.getElementById("output");
+      output.innerHTML = "";
+
+      if (!manifestId || !keyBase64 || !ivBase64) {
+        alert("Bitte alle Felder ausfüllen oder QR-Code scannen.");
+        return;
+      }
+
+      let manifest;
+      try {
+        manifest = scannedManifest
+          ? scannedManifest
+          : await fetch(`https://arweave.net/${manifestId}`).then(res => res.json());
+      } catch (e) {
+        output.innerHTML = "<p style='color:red;'>❌ Manifest konnte nicht geladen werden.</p>";
+        console.error(e);
+        return;
+      }
+
+      try {
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+
+        output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+
+        for (const [name, info] of Object.entries(manifest.paths)) {
+          const txId = info.id;
+          const fileUrl = `https://arweave.net/${txId}`;
+          const entry = document.createElement("div");
+          entry.className = "file-entry";
+          entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+          output.appendChild(entry);
+
+          try {
+            const res = await fetch(fileUrl);
+            const encryptedBuffer = await res.arrayBuffer();
+
+            const decrypted = await crypto.subtle.decrypt(
+              { name: "AES-CBC", iv },
+              cryptoKey,
+              encryptedBuffer
+            );
+
+            const blob = new Blob([decrypted]);
+            const url = URL.createObjectURL(blob);
+
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = name;
+            img.className = "preview";
+
+            entry.innerHTML = `<strong>${name}</strong><br>`;
+            entry.appendChild(img);
+          } catch (err) {
+            entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+            console.error(err);
+          }
+        }
+      } catch (err) {
+        output.innerHTML = "<p style='color:red;'>❌ Entschlüsselung fehlgeschlagen.</p>";
+        console.error(err);
+      }
+    });
+  </script>
+</body>
+</html>
