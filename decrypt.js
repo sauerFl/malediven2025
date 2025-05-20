@@ -5,8 +5,8 @@ const chain = 'polygon';
 const tokenId = '1';
 
 // Arweave-Links
-const keyUrl = 'https://arweave.net/ajtB17K5rjPUJgUYrVxoBM_S6nC-J20ShVgKbS7EuSA';
-const manifestUrl = 'https://arweave.net/<manifest-TXID>'; // TODO: Manifest-TXID einsetzen
+const keyUrl = 'https://arweave.net/ajtB17K5rjPUJgUYrVxoBM_S6nC-J20ShVgKbS7EuSA'; // Verschlüsselte Schlüssel
+const manifestUrl = 'https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ'; // TODO: Manifest-TXID einsetzen
 
 // AES-Parameter
 const base64Key = 'lMdDv+0GMwQaPFyMmCVbyU0tv7o6aYRR33I8jdg8kWY=';
