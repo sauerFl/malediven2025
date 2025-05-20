@@ -92,7 +92,7 @@
         const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
         const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
 
-        const response = await fetch("https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ");
+        const response = await fetch("https://arweave.net/yo_ZfBRaXwzFGpxpAMT9jby6RrmkAQu4UfVIY2jNRYI");
         const encryptedBuffer = await response.arrayBuffer();
 
         const cryptoKey = await crypto.subtle.importKey(
