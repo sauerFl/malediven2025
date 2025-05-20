@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>NFT-geschützter Zugriff</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+    }
+    #status {
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Zugriffsschutz per NFT</h1>
+  <p>Die Datei auf Arweave wird entschlüsselt, wenn du den richtigen NFT besitzt.</p>
+  <button id="startBtn">🔓 Zugriff starten</button>
+  <div id="status">Bereit</div>
+
+  <script type="module">
+    import LitJsSdk from 'https://cdn.jsdelivr.net/npm/@lit-protocol/lit-browser-sdk@2.0.4/+esm';
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      const status = document.getElementById('status');
+      status.textContent = "🔗 Verbinde mit Lit...";
+
+      const client = new LitJsSdk.LitNodeClient({ litNetwork: "serrano" });
+      await client.connect();
+
+      status.textContent = "✅ Verbunden – öffne Wallet zur Authentifizierung...";
+      const authSig = await LitJsSdk.checkAndSignAuthMessage({ chain: "polygon" });
+
+      const accessControlConditions = [
+        {
+          contractAddress: "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1",
+          standardContractType: "ERC721",
+          chain: "polygon",
+          method: "ownerOf",
+          parameters: ["1"],
+          returnValueTest: {
+            comparator: "=",
+            value: ":userAddress"
+          }
+        }
+      ];
+
+      try {
+        status.textContent = "📡 Lade verschlüsselte Datei...";
+        const response = await fetch("https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ");
+        const encryptedBlob = await response.blob();
+        const encryptedArrayBuffer = await encryptedBlob.arrayBuffer();
+
+        const encryptedSymmetricKeyHex = prompt("🔐 Füge hier den verschlüsselten AES-Schlüssel (Hex) ein:");
+        const encryptedSymmetricKey = new Uint8Array(encryptedSymmetricKeyHex.match(/.(1, 2)/g).map(byte => parseInt(byte, 16)));
+
+        status.textContent = "🔓 Fordere Entschlüsselung bei Lit an...";
+
+        const symmetricKey = await client.getEncryptionKey({
+          unifiedAccessControlConditions: accessControlConditions,
+          toDecrypt: LitJsSdk.uint8arrayToString(encryptedSymmetricKey, "base16"),
+          chain: "polygon",
+          authSig
+        });
+
+        const ivBase64 = prompt("📥 Füge hier die IV aus lit_key_meta.json ein (Base64):");
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          symmetricKey,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-CBC", iv },
+          cryptoKey,
+          encryptedArrayBuffer
+        );
+
+        const blob = new Blob([decrypted]);
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = "entschluesselt.jpg";
+        link.textContent = "⬇️ Entschlüsselte Datei herunterladen";
+        document.body.appendChild(link);
+
+        status.textContent = "✅ Entschlüsselung erfolgreich.";
+      } catch (e) {
+        console.error(e);
+        status.textContent = "❌ Fehler bei der Entschlüsselung – Details in der Konsole.";
+      }
+    });
+  </script>
+</body>
+</html>
