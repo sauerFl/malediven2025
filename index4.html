@@ -3,21 +3,25 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <title>Index4 – Alles aus QR-Code</title>
+  <title>Index4 – QR-basierte Entschlüsselung (sichtbare Felder)</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { font-family: sans-serif; background: #f4faff; padding: 2em; text-align: center; }
-    button { padding: 0.6em 1.2em; margin-top: 1em; }
+    button, input { margin-top: 1em; padding: 0.6em; width: 90%; max-width: 500px; }
     .file-entry { margin-top: 2em; }
     img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
     #qr-reader { width: 300px; margin: 2em auto; display: none; }
+    textarea { width: 90%; height: 120px; margin-top: 1em; font-family: monospace; }
   </style>
 </head>
 <body>
-  <h1>📷 QR-only Entschlüsselung (offlinefähig)</h1>
-  <p>Scanne einen QR-Code, der Manifest, Key & IV enthält – komplett ohne externen Abruf.</p>
+  <h1>📷 QR-only Entschlüsselung + Werte anzeigen</h1>
   <button id="startScan">📷 QR-Code scannen</button>
   <div id="qr-reader"></div>
+
+  <input id="manifestField" placeholder="Manifest-ID (aus Pfad)" readonly /><br>
+  <input id="keyField" placeholder="AES-Key (Base64)" readonly /><br>
+  <input id="ivField" placeholder="IV (Base64)" readonly /><br>
 
   <div id="output"></div>
 
@@ -44,6 +48,12 @@
 
             const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
             const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+            // Trage erste Manifest-TX-ID ins Feld ein
+            const firstId = Object.values(manifestPaths)[0]?.id || "";
+            document.getElementById("manifestField").value = firstId;
+            document.getElementById("keyField").value = keyBase64;
+            document.getElementById("ivField").value = ivBase64;
 
             const cryptoKey = await crypto.subtle.importKey(
               "raw",
@@ -91,7 +101,7 @@
             console.error(e);
           }
         },
-        (error) => { /* ignorieren */ }
+        (error) => { /* Ignorieren */ }
       );
     });
   </script>
