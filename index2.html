@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Manifest-basierte Entschlüsselung</title>
+  <style>
+    body { font-family: sans-serif; background: #eef6ff; padding: 2em; text-align: center; }
+    input, button { margin-top: 1em; padding: 0.6em; width: 80%; max-width: 400px; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>🔓 Manifest-Entschlüsselung</h1>
+  <p>Gib AES-Key & IV ein (Base64), um alle verschlüsselten Dateien aus dem Manifest zu entschlüsseln.</p>
+
+  <input id="manifestIdInput" placeholder="Arweave Manifest TX-ID" /><br>
+  <input id="keyInput" placeholder="AES-Schlüssel (Base64)" /><br>
+  <input id="ivInput" placeholder="IV (Base64)" /><br>
+  <button id="startDecrypt">Manifest laden & Dateien entschlüsseln</button>
+
+  <div id="output"></div>
+
+  <script>
+    document.getElementById("startDecrypt").addEventListener("click", async () => {
+      const manifestId = document.getElementById("manifestIdInput").value;
+      const keyBase64 = document.getElementById("keyInput").value;
+      const ivBase64 = document.getElementById("ivInput").value;
+      const output = document.getElementById("output");
+
+      if (!manifestId || !keyBase64 || !ivBase64) {
+        alert("Bitte Manifest-ID, Key und IV eingeben.");
+        return;
+      }
+
+      try {
+        const manifestUrl = `https://arweave.net/${manifestId}`;
+        const manifest = await fetch(manifestUrl).then(res => res.json());
+
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+
+        output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+
+        for (const [name, info] of Object.entries(manifest.paths)) {
+          const txId = info.id;
+          const fileUrl = `https://arweave.net/${txId}`;
+          const entry = document.createElement("div");
+          entry.className = "file-entry";
+          entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+          output.appendChild(entry);
+
+          try {
+            const res = await fetch(fileUrl);
+            const encryptedBuffer = await res.arrayBuffer();
+
+            const decrypted = await crypto.subtle.decrypt(
+              { name: "AES-CBC", iv },
+              cryptoKey,
+              encryptedBuffer
+            );
+
+            const blob = new Blob([decrypted]);
+            const url = URL.createObjectURL(blob);
+
+            // Direktanzeige (z. B. für Bilder)
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = name;
+            img.className = "preview";
+
+            entry.innerHTML = `<strong>${name}</strong><br>`;
+            entry.appendChild(img);
+          } catch (err) {
+            entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+            console.error(err);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        alert("❌ Fehler beim Laden des Manifests.");
+      }
+    });
+  </script>
+</body>
+</html>
