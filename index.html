@@ -1,0 +1,87 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Pauschal entschlüsseln & anzeigen</title>
+  <style>
+    body { font-family: sans-serif; background: #eef6ff; padding: 2em; text-align: center; }
+    input, button { margin-top: 1em; padding: 0.6em; width: 80%; max-width: 400px; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>🔓 Entschlüsselung & Vorschau</h1>
+  <p>Gib den AES-Key & IV ein, um verschlüsselte Dateien direkt anzuzeigen.</p>
+
+  <input id="keyInput" placeholder="AES-Schlüssel (Base64)" /><br>
+  <input id="ivInput" placeholder="IV (Base64)" /><br>
+  <button id="startDecrypt">Jetzt entschlüsseln & anzeigen</button>
+
+  <div id="output"></div>
+
+  <script>
+    const encryptedFiles = [
+      "https://arweave.net/JQ2XT34Agw4J5kMhtDumZyo_ydMdv_8lsltfnw_EldI",
+      "https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ"
+    ];
+
+    document.getElementById("startDecrypt").addEventListener("click", async () => {
+      const keyBase64 = document.getElementById("keyInput").value;
+      const ivBase64 = document.getElementById("ivInput").value;
+      const output = document.getElementById("output");
+
+      if (!keyBase64 || !ivBase64) {
+        alert("Key und IV bitte eingeben.");
+        return;
+      }
+
+      const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+      const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+      const cryptoKey = await crypto.subtle.importKey(
+        "raw",
+        keyBytes,
+        { name: "AES-CBC" },
+        false,
+        ["decrypt"]
+      );
+
+      output.innerHTML = "<h3>Ergebnisse:</h3>";
+
+      for (const fileUrl of encryptedFiles) {
+        const entry = document.createElement("div");
+        entry.className = "file-entry";
+        entry.innerHTML = `<strong>${fileUrl}</strong><br>lade...`;
+        output.appendChild(entry);
+
+        try {
+          const response = await fetch(fileUrl);
+          const encryptedBuffer = await response.arrayBuffer();
+
+          const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-CBC", iv },
+            cryptoKey,
+            encryptedBuffer
+          );
+
+          const blob = new Blob([decrypted]);
+          const url = URL.createObjectURL(blob);
+
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = "Entschlüsseltes Bild";
+          img.className = "preview";
+
+          entry.innerHTML = `<strong>${fileUrl}</strong><br>`;
+          entry.appendChild(img);
+        } catch (err) {
+          console.error(err);
+          entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+        }
+      }
+    });
+  </script>
+</body>
+</html>
