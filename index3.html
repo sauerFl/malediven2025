@@ -1,0 +1,126 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>NFT-Zugang + Entschlüsselung</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f8faff;
+      text-align: center;
+      padding: 2em;
+    }
+    button {
+      font-size: 1em;
+      padding: 1em 2em;
+      border: none;
+      border-radius: 5px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #status {
+      margin-top: 1em;
+      font-weight: bold;
+    }
+    #downloadLink {
+      display: none;
+      margin-top: 2em;
+      padding: 1em 2em;
+      background-color: #2980b9;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Zugang und Entschlüsselung: Malediven 2025 – D+F</h1>
+  <p>Verbinde deine Wallet, prüfe NFT-Zugriff und entschlüssle die Datei direkt im Browser.</p>
+  <button id="startBtn">🔐 Zugriff prüfen & Datei entschlüsseln</button>
+  <div id="status">Noch nicht verbunden.</div>
+  <a id="downloadLink" href="#" download="Malediven2025.jpg">⬇️ Entschlüsselte Datei herunterladen</a>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
+    const TOKEN_ID = "1";
+    const ABI = [{
+      constant: true,
+      inputs: [{ name: "tokenId", type: "uint256" }],
+      name: "ownerOf",
+      outputs: [{ name: "", type: "address" }],
+      type: "function"
+    }];
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+
+      if (typeof window.ethereum === "undefined") {
+        alert("Bitte installiere MetaMask.");
+        return;
+      }
+
+      const web3 = new Web3(window.ethereum);
+      try {
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        const userAddress = accounts[0];
+        status.textContent = "🔍 NFT-Zugriff wird geprüft...";
+
+        const contract = new web3.eth.Contract(ABI, CONTRACT_ADDRESS);
+        const owner = await contract.methods.ownerOf(TOKEN_ID).call();
+
+        if (owner.toLowerCase() !== userAddress.toLowerCase()) {
+          status.textContent = "🚫 Zugriff verweigert – kein gültiger NFT gefunden.";
+          return;
+        }
+
+        status.textContent = "✅ NFT bestätigt. Entschlüsselung wird vorbereitet...";
+
+        const ivBase64 = prompt("Bitte gib die IV aus lit_key_meta.json ein (Base64):");
+        const keyBase64 = prompt("Bitte gib den AES-Schlüssel aus lit_key_meta.json ein (Base64):");
+
+        if (!ivBase64 || !keyBase64) {
+          alert("Beide Eingaben sind erforderlich.");
+          return;
+        }
+
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+
+        const response = await fetch("https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ");
+        const encryptedBuffer = await response.arrayBuffer();
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-CBC", iv },
+          cryptoKey,
+          encryptedBuffer
+        );
+
+        const blob = new Blob([decrypted]);
+        const url = URL.createObjectURL(blob);
+
+        const link = document.getElementById("downloadLink");
+        link.href = url;
+        link.style.display = "inline-block";
+        status.textContent = "✅ Entschlüsselung erfolgreich. Datei bereit.";
+      } catch (err) {
+        console.error(err);
+        status.textContent = "❌ Fehler beim Zugriff oder der Entschlüsselung.";
+      }
+    });
+  </script>
+</body>
+</html>
