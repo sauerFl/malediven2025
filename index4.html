@@ -1,0 +1,99 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Index4 – Alles aus QR-Code</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; background: #f4faff; padding: 2em; text-align: center; }
+    button { padding: 0.6em 1.2em; margin-top: 1em; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+    #qr-reader { width: 300px; margin: 2em auto; display: none; }
+  </style>
+</head>
+<body>
+  <h1>📷 QR-only Entschlüsselung (offlinefähig)</h1>
+  <p>Scanne einen QR-Code, der Manifest, Key & IV enthält – komplett ohne externen Abruf.</p>
+  <button id="startScan">📷 QR-Code scannen</button>
+  <div id="qr-reader"></div>
+
+  <div id="output"></div>
+
+  <script>
+    document.getElementById("startScan").addEventListener("click", () => {
+      const reader = new Html5Qrcode("qr-reader");
+      document.getElementById("qr-reader").style.display = "block";
+
+      reader.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        async (decodedText, result) => {
+          try {
+            const data = JSON.parse(decodedText);
+            reader.stop();
+            document.getElementById("qr-reader").style.display = "none";
+
+            const keyBase64 = data.key;
+            const ivBase64 = data.iv;
+            const manifestPaths = data.manifest.paths;
+
+            const output = document.getElementById("output");
+            output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+
+            const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+            const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+
+            const cryptoKey = await crypto.subtle.importKey(
+              "raw",
+              keyBytes,
+              { name: "AES-CBC" },
+              false,
+              ["decrypt"]
+            );
+
+            for (const [name, info] of Object.entries(manifestPaths)) {
+              const fileUrl = `https://arweave.net/${info.id}`;
+              const entry = document.createElement("div");
+              entry.className = "file-entry";
+              entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+              output.appendChild(entry);
+
+              try {
+                const res = await fetch(fileUrl);
+                const encryptedBuffer = await res.arrayBuffer();
+
+                const decrypted = await crypto.subtle.decrypt(
+                  { name: "AES-CBC", iv },
+                  cryptoKey,
+                  encryptedBuffer
+                );
+
+                const blob = new Blob([decrypted]);
+                const url = URL.createObjectURL(blob);
+
+                const img = document.createElement("img");
+                img.src = url;
+                img.alt = name;
+                img.className = "preview";
+
+                entry.innerHTML = `<strong>${name}</strong><br>`;
+                entry.appendChild(img);
+              } catch (err) {
+                entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+                console.error(err);
+              }
+            }
+
+          } catch (e) {
+            alert("❌ Ungültiger QR-Inhalt");
+            console.error(e);
+          }
+        },
+        (error) => { /* ignorieren */ }
+      );
+    });
+  </script>
+</body>
+</html>
