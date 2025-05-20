@@ -1,0 +1,147 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>NFT-Zugang mit Key-Eingabe</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #eef6ff;
+      padding: 2em;
+      text-align: center;
+    }
+    input {
+      padding: 0.5em;
+      width: 80%;
+      margin-top: 1em;
+    }
+    button {
+      margin-top: 1em;
+      padding: 0.8em 2em;
+      background-color: #007bff;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #status {
+      margin-top: 1em;
+      font-weight: bold;
+    }
+    #downloadLink {
+      display: none;
+      margin-top: 2em;
+      padding: 1em 2em;
+      background-color: #2980b9;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Zugang: Malediven 2025 – D+F</h1>
+  <p>Nur NFT-Besitzer erhalten Zugriff auf den AES-Schlüssel und die Datei.</p>
+  <button id="connectBtn">🔗 Wallet verbinden & NFT prüfen</button>
+  <div id="status">Noch nicht verbunden.</div>
+
+  <div id="decryptSection" style="display:none;">
+    <input id="keyInput" placeholder="AES-Schlüssel (Base64)" /><br/>
+    <input id="ivInput" placeholder="IV (Base64)" /><br/>
+    <button id="decryptBtn">🔓 Entschlüsseln</button>
+    <a id="downloadLink" href="#" download="Malediven2025.jpg">⬇️ Entschlüsselte Datei herunterladen</a>
+  </div>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
+    const TOKEN_ID = "1";
+    const ABI = [{
+      constant: true,
+      inputs: [{ name: "tokenId", type: "uint256" }],
+      name: "ownerOf",
+      outputs: [{ name: "", type: "address" }],
+      type: "function"
+    }];
+
+    document.getElementById("connectBtn").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+
+      if (typeof window.ethereum === "undefined") {
+        alert("Bitte MetaMask installieren.");
+        return;
+      }
+
+      const web3 = new Web3(window.ethereum);
+      try {
+        const accounts = await ethereum.request({ method: "eth_requestAccounts" });
+        const userAddress = accounts[0];
+        status.textContent = "🔍 NFT-Zugriff wird geprüft...";
+
+        const contract = new web3.eth.Contract(ABI, CONTRACT_ADDRESS);
+        const owner = await contract.methods.ownerOf(TOKEN_ID).call();
+
+        if (owner.toLowerCase() === userAddress.toLowerCase()) {
+          status.textContent = "✅ NFT bestätigt. Du kannst jetzt entschlüsseln.";
+          document.getElementById("decryptSection").style.display = "block";
+        } else {
+          status.textContent = "🚫 Kein gültiger NFT gefunden.";
+        }
+      } catch (err) {
+        console.error(err);
+        status.textContent = "❌ Fehler bei der Wallet-Verbindung.";
+      }
+    });
+
+    document.getElementById("decryptBtn").addEventListener("click", async () => {
+      const keyBase64 = document.getElementById("keyInput").value;
+      const ivBase64 = document.getElementById("ivInput").value;
+      const status = document.getElementById("status");
+
+      if (!keyBase64 || !ivBase64) {
+        alert("Bitte Key und IV eingeben.");
+        return;
+      }
+
+      try {
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+
+        status.textContent = "📥 Lade verschlüsselte Datei...";
+
+        const response = await fetch("https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ");
+        const encryptedBuffer = await response.arrayBuffer();
+
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
+
+        const decrypted = await crypto.subtle.decrypt(
+          { name: "AES-CBC", iv },
+          cryptoKey,
+          encryptedBuffer
+        );
+
+        const blob = new Blob([decrypted]);
+        const url = URL.createObjectURL(blob);
+
+        const link = document.getElementById("downloadLink");
+        link.href = url;
+        link.style.display = "inline-block";
+        status.textContent = "✅ Entschlüsselung erfolgreich.";
+      } catch (err) {
+        console.error(err);
+        status.textContent = "❌ Entschlüsselung fehlgeschlagen.";
+      }
+    });
+  </script>
+</body>
+</html>
