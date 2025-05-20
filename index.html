@@ -2,84 +2,128 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <title>Pauschal entschlüsseln & anzeigen</title>
+  <meta charset="UTF-8" />
+  <title>Index4 – QR + manuelle Eingabe</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
-    body { font-family: sans-serif; background: #eef6ff; padding: 2em; text-align: center; }
-    input, button { margin-top: 1em; padding: 0.6em; width: 80%; max-width: 400px; }
+    body { font-family: sans-serif; background: #f4faff; padding: 2em; text-align: center; }
+    button, input { margin-top: 1em; padding: 0.6em; width: 90%; max-width: 500px; }
     .file-entry { margin-top: 2em; }
     img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+    #qr-reader { width: 300px; margin: 2em auto; display: none; }
   </style>
 </head>
 <body>
-  <h1>🔓 Entschlüsselung & Vorschau</h1>
-  <p>Gib den AES-Key & IV ein, um verschlüsselte Dateien direkt anzuzeigen.</p>
+  <h1>📷 QR oder manuelle Eingabe</h1>
+  <button id="startScan">📷 QR-Code scannen</button>
+  <div id="qr-reader"></div>
 
-  <input id="keyInput" placeholder="AES-Schlüssel (Base64)" /><br>
-  <input id="ivInput" placeholder="IV (Base64)" /><br>
-  <button id="startDecrypt">Jetzt entschlüsseln & anzeigen</button>
+  <input id="manifestField" placeholder="Manifest-ID (aus Pfad)" />
+  <input id="keyField" placeholder="AES-Key (Base64)" />
+  <input id="ivField" placeholder="IV (Base64)" />
+  <button id="decryptNow">🔓 Jetzt entschlüsseln</button>
 
   <div id="output"></div>
 
   <script>
-    const encryptedFiles = [
-      "https://arweave.net/JQ2XT34Agw4J5kMhtDumZyo_ydMdv_8lsltfnw_EldI",
-      "https://arweave.net/YaijLOYlnGtboDZ193kfgJDtMGr3nBfmcwsCjU0a1yQ"
-    ];
+    let manifestPaths = {};
 
-    document.getElementById("startDecrypt").addEventListener("click", async () => {
-      const keyBase64 = document.getElementById("keyInput").value;
-      const ivBase64 = document.getElementById("ivInput").value;
+    document.getElementById("startScan").addEventListener("click", () => {
+      const reader = new Html5Qrcode("qr-reader");
+      document.getElementById("qr-reader").style.display = "block";
+
+      reader.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText, result) => {
+          try {
+            const data = JSON.parse(decodedText);
+            const keyBase64 = data.key;
+            const ivBase64 = data.iv;
+            manifestPaths = data.manifest.paths;
+
+            document.getElementById("manifestField").value = Object.values(manifestPaths)[0]?.id || "";
+            document.getElementById("keyField").value = keyBase64;
+            document.getElementById("ivField").value = ivBase64;
+
+            reader.stop();
+            document.getElementById("qr-reader").style.display = "none";
+          } catch (e) {
+            alert("❌ Ungültiger QR-Code-Inhalt.");
+            console.error(e);
+          }
+        },
+        (error) => { /* ignoriere Decoding-Fehler */ }
+      );
+    });
+
+    document.getElementById("decryptNow").addEventListener("click", async () => {
+      const manifestId = document.getElementById("manifestField").value.trim();
+      const keyBase64 = document.getElementById("keyField").value.trim();
+      const ivBase64 = document.getElementById("ivField").value.trim();
       const output = document.getElementById("output");
+      output.innerHTML = "";
 
-      if (!keyBase64 || !ivBase64) {
-        alert("Key und IV bitte eingeben.");
+      if (!manifestId || !keyBase64 || !ivBase64) {
+        alert("Bitte Manifest-ID, Key und IV ausfüllen.");
         return;
       }
 
-      const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
-      const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+      // Falls keine QR-Daten geladen wurden, erzeuge Standardstruktur
+      if (Object.keys(manifestPaths).length === 0) {
+        manifestPaths = {
+          "1.jpg.encrypted": { id: manifestId }
+        };
+      }
 
-      const cryptoKey = await crypto.subtle.importKey(
-        "raw",
-        keyBytes,
-        { name: "AES-CBC" },
-        false,
-        ["decrypt"]
-      );
+      try {
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
 
-      output.innerHTML = "<h3>Ergebnisse:</h3>";
+        const cryptoKey = await crypto.subtle.importKey(
+          "raw",
+          keyBytes,
+          { name: "AES-CBC" },
+          false,
+          ["decrypt"]
+        );
 
-      for (const fileUrl of encryptedFiles) {
-        const entry = document.createElement("div");
-        entry.className = "file-entry";
-        entry.innerHTML = `<strong>${fileUrl}</strong><br>lade...`;
-        output.appendChild(entry);
+        for (const [name, info] of Object.entries(manifestPaths)) {
+          const fileUrl = `https://arweave.net/${info.id}`;
+          const entry = document.createElement("div");
+          entry.className = "file-entry";
+          entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+          output.appendChild(entry);
 
-        try {
-          const response = await fetch(fileUrl);
-          const encryptedBuffer = await response.arrayBuffer();
+          try {
+            const res = await fetch(fileUrl);
+            const encryptedBuffer = await res.arrayBuffer();
 
-          const decrypted = await crypto.subtle.decrypt(
-            { name: "AES-CBC", iv },
-            cryptoKey,
-            encryptedBuffer
-          );
+            const decrypted = await crypto.subtle.decrypt(
+              { name: "AES-CBC", iv },
+              cryptoKey,
+              encryptedBuffer
+            );
 
-          const blob = new Blob([decrypted]);
-          const url = URL.createObjectURL(blob);
+            const blob = new Blob([decrypted]);
+            const url = URL.createObjectURL(blob);
 
-          const img = document.createElement("img");
-          img.src = url;
-          img.alt = "Entschlüsseltes Bild";
-          img.className = "preview";
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = name;
+            img.className = "preview";
 
-          entry.innerHTML = `<strong>${fileUrl}</strong><br>`;
-          entry.appendChild(img);
-        } catch (err) {
-          console.error(err);
-          entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+            entry.innerHTML = `<strong>${name}</strong><br>`;
+            entry.appendChild(img);
+          } catch (err) {
+            entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+            console.error(err);
+          }
         }
+
+      } catch (err) {
+        alert("❌ Entschlüsselung nicht möglich.");
+        console.error(err);
       }
     });
   </script>
