@@ -1,0 +1,201 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <title>One-QR mit NFT-Check & Signaturnachweis</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body {
+  font-family: system-ui, sans-serif;
+  margin: 0; background: #eef6ff; padding: 2em; text-align: center; }
+    input, button {
+  font-size: 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box; margin-top: 1em; padding: 0.6em; width: 90%; max-width: 500px; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+    #qr-reader {
+      max-width: 320px;
+      width: 100%;
+      aspect-ratio: 1;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 2em auto;
+      display: none;
+    }
+    .meta-info { margin-top: 2em; font-size: 0.9em; color: #333; }
+    textarea { width: 90%; max-width: 600px; height: 100px; margin-top: 1em; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <h1>🔐 NFT-Zugriff + Nachweis</h1>
+  <p>Scanne einen QR-Code mit Manifest, Key & IV oder gib sie manuell ein.</p>
+
+  <button onclick="startOneQRScan()">📷 QR-Code scannen (alle Daten)</button>
+  <div id="qr-reader"></div>
+
+  <input id="manifestInput" placeholder="Arweave Manifest TX-ID" />
+  <input id="keyInput" placeholder="AES-Schlüssel (Base64)" />
+  <input id="ivInput" placeholder="IV (Base64)" />
+
+  <button id="startDecrypt">🔓 Jetzt entschlüsseln (NFT-basiert)</button>
+  <div class="meta-info" id="accessInfo"></div>
+
+  <button id="signProof" style="display:none;">✍️ Signatur erzeugen</button>
+  <textarea id="signatureOutput" readonly></textarea>
+
+  <div id="output"></div>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
+    const TOKEN_RANGE = Array.from({ length: 100 }, (_, i) => (i + 1).toString());
+    const abi = [
+      {
+        "constant": true,
+        "inputs": [{ "name": "tokenId", "type": "uint256" }],
+        "name": "ownerOf",
+        "outputs": [{ "name": "owner", "type": "address" }],
+        "type": "function"
+      }
+    ];
+
+    let scannedManifest = "";
+    let scannedKey = "";
+    let scannedIV = "";
+    let connectedAddress = "";
+
+    function startOneQRScan() {
+      const reader = new Html5Qrcode("qr-reader");
+      document.getElementById("qr-reader").style.display = "block";
+
+      reader.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: 250 },
+        (decodedText) => {
+          try {
+            const data = JSON.parse(decodedText);
+            scannedManifest = Object.values(data.manifest.paths)[0]?.id || "";
+            scannedKey = data.key || "";
+            scannedIV = data.iv || "";
+
+            document.getElementById("manifestInput").value = scannedManifest;
+            document.getElementById("keyInput").value = scannedKey;
+            document.getElementById("ivInput").value = scannedIV;
+
+            reader.stop();
+            document.getElementById("qr-reader").style.display = "none";
+          } catch (e) {
+            alert("❌ Ungültiger QR-Code.");
+            console.error(e);
+          }
+        },
+        (error) => {}
+      );
+    }
+
+    async function checkNFTAccess(account) {
+      const web3 = new Web3(window.ethereum);
+      const contract = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
+
+      for (let tokenId of TOKEN_RANGE) {
+        try {
+          const owner = await contract.methods.ownerOf(tokenId).call();
+          if (owner.toLowerCase() === account.toLowerCase()) return true;
+        } catch {}
+      }
+      return false;
+    }
+
+    document.getElementById("startDecrypt").addEventListener("click", async () => {
+      const manifestId = document.getElementById("manifestInput").value.trim() || scannedManifest;
+      const keyBase64 = document.getElementById("keyInput").value.trim() || scannedKey;
+      const ivBase64 = document.getElementById("ivInput").value.trim() || scannedIV;
+      const output = document.getElementById("output");
+      const info = document.getElementById("accessInfo");
+      output.innerHTML = "";
+      info.innerHTML = "";
+
+      if (!manifestId || !keyBase64 || !ivBase64) {
+        alert("Bitte alle Werte eingeben oder per QR scannen.");
+        return;
+      }
+
+      if (!window.ethereum) {
+        alert("MetaMask wird benötigt.");
+        return;
+      }
+
+      const web3 = new Web3(window.ethereum);
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const accounts = await web3.eth.getAccounts();
+      connectedAddress = accounts[0];
+
+      const access = await checkNFTAccess(connectedAddress);
+      if (!access) {
+        alert("❌ Kein gültiger NFT (Token 1–100) gefunden.");
+        return;
+      }
+
+      const timestamp = new Date().toISOString();
+      info.innerHTML = `✅ Zugriff gewährt für Wallet:<br><b>${connectedAddress}</b><br><small>${timestamp}</small>`;
+      document.getElementById("signProof").style.display = "inline-block";
+
+      try {
+        const manifest = await fetch(`https://arweave.net/${manifestId}`).then(res => res.json());
+        const keyBytes = Uint8Array.from(atob(keyBase64), c => c.charCodeAt(0));
+        const iv = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        const cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-CBC" }, false, ["decrypt"]);
+
+        output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+
+        for (const [name, info] of Object.entries(manifest.paths)) {
+          const fileUrl = `https://arweave.net/${info.id}`;
+          const entry = document.createElement("div");
+          entry.className = "file-entry";
+          entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+          output.appendChild(entry);
+
+          try {
+            const res = await fetch(fileUrl);
+            const encryptedBuffer = await res.arrayBuffer();
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-CBC", iv }, cryptoKey, encryptedBuffer);
+            const blob = new Blob([decrypted]);
+            const url = URL.createObjectURL(blob);
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = name;
+            img.className = "preview";
+            entry.innerHTML = `<strong>${name}</strong><br>`;
+            entry.appendChild(img);
+          } catch (err) {
+            entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+            console.error(err);
+          }
+        }
+      } catch (e) {
+        output.innerHTML = "<p style='color:red;'>❌ Fehler beim Laden des Manifests.</p>";
+        console.error(e);
+      }
+    });
+
+    document.getElementById("signProof").addEventListener("click", async () => {
+      const web3 = new Web3(window.ethereum);
+      const message = `Zugriff auf NFT-geschützten Inhalt am ${new Date().toISOString()}`;
+      try {
+        const signature = await web3.eth.personal.sign(message, connectedAddress);
+        document.getElementById("signatureOutput").value = `Adresse: ${connectedAddress}
+Nachricht: ${message}
+Signatur:
+${signature}`;
+      } catch (e) {
+        alert("Signatur abgebrochen oder nicht möglich.");
+      }
+    });
+  </script>
+</body>
+</html>
