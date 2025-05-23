@@ -98,7 +98,7 @@ console.log("📦 Verschlüsselter encKeyBundle geladen:", encKeyBase64);
 
 
         const derivedKey = CryptoJS.SHA256(userAddress + SALT);
-        const decryptedKey = CryptoJS.AES.decrypt(encKeyBaseBase64, derivedKey.toString()).toString(CryptoJS.enc.Utf8);
+        const decryptedKey = CryptoJS.AES.decrypt(encKeyBase64, derivedKey.toString()).toString(CryptoJS.enc.Utf8);
         
 let key, iv;
 try {
