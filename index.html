@@ -127,6 +127,14 @@
     });
 
     window.onload = () => {
+  const m = getParam("m");
+  const iv = getParam("iv");
+  if (m && iv) {
+    setTimeout(() => {
+      document.getElementById("startBtn").click();
+    }, 300); // kleine Verzögerung, damit DOM bereit ist
+  }
+
       document.getElementById("manifestInput").value = getParam("m");
       document.getElementById("ivInput").value = getParam("iv");
     };
