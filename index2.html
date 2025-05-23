@@ -71,7 +71,16 @@
       }
 
       const web3 = new Web3(window.ethereum);
-      await window.ethereum.request({ method: "eth_requestAccounts" });
+      
+try {
+  await window.ethereum.request({ method: "eth_requestAccounts" });
+  console.log("✅ MetaMask verbunden");
+} catch (e) {
+  alert("❌ MetaMask konnte nicht verbunden werden.");
+  console.error(e);
+  return;
+}
+
       const accounts = await web3.eth.getAccounts();
       const userAddress = accounts[0];
       const access = await checkNFTAccess(userAddress);
@@ -83,11 +92,25 @@
 
       try {
         const encKeyJson = await fetch(ENC_KEY_URL).then(res => res.json());
-        const encKeyBase64 = encKeyJson.encKeyBundle;
+        
+const encKeyBase64 = encKeyJson.encKeyBundle;
+console.log("📦 Verschlüsselter encKeyBundle geladen:", encKeyBase64);
+
 
         const derivedKey = CryptoJS.SHA256(userAddress + SALT);
         const decryptedKey = CryptoJS.AES.decrypt(encKeyBaseBase64, derivedKey.toString()).toString(CryptoJS.enc.Utf8);
-        const { key, iv } = JSON.parse(decryptedKey);
+        
+let key, iv;
+try {
+  const parsed = JSON.parse(decryptedKey);
+  key = parsed.key;
+  iv = parsed.iv;
+} catch (err) {
+  output.innerHTML = "<p style='color:red;'>❌ Entschlüsselung fehlgeschlagen – Key oder IV ungültig.</p>";
+  console.error("❌ Fehler beim Parsen des entschlüsselten KeyBundles:", err);
+  return;
+}
+
 
         const keyBytes = Uint8Array.from(atob(key), c => c.charCodeAt(0));
         const ivBytes = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
@@ -95,7 +118,12 @@
 
         const manifest = await fetch(`https://arweave.net/${manifestId}`).then(res => res.json());
 
-        output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+        
+output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+console.log('🔍 Manifest geladen:', manifest);
+console.log('🔐 Entschlüsselter AES-Key:', key);
+console.log('🔐 Entschlüsselter IV:', iv);
+
 
         for (const [name, info] of Object.entries(manifest.paths)) {
           const fileUrl = `https://arweave.net/${info.id}`;
