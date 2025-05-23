@@ -1,0 +1,135 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NFT-geschützter Zugriff (Key aus Wallet)</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.8.2/dist/web3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 2em; background: #eef6ff; text-align: center; }
+    input, button { margin-top: 1em; padding: 0.6em; width: 90%; max-width: 500px; }
+    .file-entry { margin-top: 2em; }
+    img.preview { max-width: 90%; margin-top: 1em; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>🔐 NFT-Entschlüsselung mit Wallet-basiertem Zugriff</h1>
+  <p>Der Key wird nur berechnet, wenn du den NFT besitzt.</p>
+
+  <input id="manifestInput" placeholder="Manifest-ID (aus QR oder URL)" />
+  <input id="ivInput" placeholder="IV (Base64, aus QR oder URL)" />
+  <button id="startBtn">🔓 NFT prüfen & Inhalte entschlüsseln</button>
+
+  <div id="output"></div>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x20e8640f1b32bee9496f71ccfe74977d01ae52c1";
+    const TOKEN_RANGE = Array.from({ length: 100 }, (_, i) => (i + 1).toString());
+    const ENC_KEY_URL = "https://arweave.net/Kt6uL5wra5-ruh3mleBorkXOdJNHsg4_RyGL8WywI6M";
+    const SALT = "Malediven2025Secret";
+
+    function getParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name) || '';
+    }
+
+    async function checkNFTAccess(account) {
+      const web3 = new Web3(window.ethereum);
+      const abi = [{
+        constant: true,
+        inputs: [{ name: "tokenId", type: "uint256" }],
+        name: "ownerOf",
+        outputs: [{ name: "owner", type: "address" }],
+        type: "function"
+      }];
+      const contract = new web3.eth.Contract(abi, CONTRACT_ADDRESS);
+      for (let tokenId of TOKEN_RANGE) {
+        try {
+          const owner = await contract.methods.ownerOf(tokenId).call();
+          if (owner.toLowerCase() === account.toLowerCase()) return true;
+        } catch {}
+      }
+      return false;
+    }
+
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const manifestId = document.getElementById("manifestInput").value.trim() || getParam("m");
+      const ivBase64 = document.getElementById("ivInput").value.trim() || getParam("iv");
+      const output = document.getElementById("output");
+      output.innerHTML = "";
+
+      if (!manifestId || !ivBase64) {
+        alert("Manifest-ID und IV erforderlich.");
+        return;
+      }
+
+      if (!window.ethereum) {
+        alert("MetaMask wird benötigt.");
+        return;
+      }
+
+      const web3 = new Web3(window.ethereum);
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const accounts = await web3.eth.getAccounts();
+      const userAddress = accounts[0];
+      const access = await checkNFTAccess(userAddress);
+
+      if (!access) {
+        alert("❌ Kein gültiger NFT (Token 1–100) gefunden.");
+        return;
+      }
+
+      try {
+        const encKeyJson = await fetch(ENC_KEY_URL).then(res => res.json());
+        const encKeyBase64 = encKeyJson.encKeyBundle;
+
+        const derivedKey = CryptoJS.SHA256(userAddress + SALT);
+        const decryptedKey = CryptoJS.AES.decrypt(encKeyBaseBase64, derivedKey.toString()).toString(CryptoJS.enc.Utf8);
+        const { key, iv } = JSON.parse(decryptedKey);
+
+        const keyBytes = Uint8Array.from(atob(key), c => c.charCodeAt(0));
+        const ivBytes = Uint8Array.from(atob(ivBase64), c => c.charCodeAt(0));
+        const cryptoKey = await crypto.subtle.importKey("raw", keyBytes, { name: "AES-CBC" }, false, ["decrypt"]);
+
+        const manifest = await fetch(`https://arweave.net/${manifestId}`).then(res => res.json());
+
+        output.innerHTML = "<h3>Entschlüsselungsergebnisse:</h3>";
+
+        for (const [name, info] of Object.entries(manifest.paths)) {
+          const fileUrl = `https://arweave.net/${info.id}`;
+          const entry = document.createElement("div");
+          entry.className = "file-entry";
+          entry.innerHTML = `<strong>${name}</strong><br>Lade...`;
+          output.appendChild(entry);
+
+          try {
+            const res = await fetch(fileUrl);
+            const encryptedBuffer = await res.arrayBuffer();
+            const decrypted = await crypto.subtle.decrypt({ name: "AES-CBC", iv: ivBytes }, cryptoKey, encryptedBuffer);
+            const blob = new Blob([decrypted]);
+            const url = URL.createObjectURL(blob);
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = name;
+            img.className = "preview";
+            entry.innerHTML = `<strong>${name}</strong><br>`;
+            entry.appendChild(img);
+          } catch {
+            entry.innerHTML += "<br>❌ Entschlüsselung fehlgeschlagen.";
+          }
+        }
+      } catch (e) {
+        output.innerHTML = "<p style='color:red;'>❌ Fehler beim Entschlüsseln des Schlüssels oder Inhalts.</p>";
+        console.error(e);
+      }
+    });
+
+    window.onload = () => {
+      document.getElementById("manifestInput").value = getParam("m");
+      document.getElementById("ivInput").value = getParam("iv");
+    };
+  </script>
+</body>
+</html>
